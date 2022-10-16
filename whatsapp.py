@@ -1,4 +1,7 @@
+#!/usr/bin/python3
+
 from __future__ import annotations
+import sys
 import os
 import platform
 import random
@@ -21,11 +24,11 @@ class FileInfo:
         self.date_created = date_created
         self.file_name = file_name
 
-NUMBER_OF_PHOTOGRAPHS = 2
-PHOTO_COLLECT_LOCATION = r"/path/to/photos/for/sending"
-PHOTO_DEPOSIT_LOCATION = r"/path/to/photos/already/sent"
-GROUP_TO_SEND_TO = "Name of WhatsApp contact/group" # Plaintext name as it appears on WhatsApp
-USER_DATA_DIRECTORY = r"Memory/WebWhatsAppBot"      # This prevents you having to scan the QR code every time. It gets written to on first running.
+NUMBER_OF_PHOTOGRAPHS = 5
+PHOTO_COLLECT_LOCATION = r"/home/admin/Desktop/whatsapp-sender/PicturesToSend"
+PHOTO_DEPOSIT_LOCATION = r"/home/admin/Desktop/whatsapp-sender/PicturesSent"
+GROUP_TO_SEND_TO = "Photo bombs"
+USER_DATA_DIRECTORY = r"/home/admin/Desktop/whatsapp-sender/Memory/WebWhatsAppBot"      # This prevents you having to scan the QR code every time
 
 
 def creation_date(path_to_file):
@@ -33,7 +36,7 @@ def creation_date(path_to_file):
     Try to get the date that a file was created, falling back to when it was
     last modified if that isn't possible.
     """
-    
+
     if platform.system() == 'Windows':
         timestamp = os.path.getctime(path_to_file)
         return datetime.fromtimestamp(timestamp).strftime("%H:%M, %d %B %Y")
@@ -55,13 +58,16 @@ def collect_photograph(collection_filepath: str) -> FileInfo:
     return FileInfo(file_location, date_created, file_name)
 
 def setup_selenium(group_to_receive: str, user_data_directory: str) -> WebDriver:
+    sys.stdout.flush()
     if platform.system() == 'Windows':
         from webdriver_manager.chrome import ChromeDriverManager
         chrome_options: Options = Options()
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument("user-data-dir=" + user_data_directory)
         chrome_options.add_argument("--headless")
-        driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=chrome_options)
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        driver = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
     else:
         chrome_options: Options = Options()
         chrome_options.binary_location = "/usr/bin/chromium-browser"
@@ -69,12 +75,15 @@ def setup_selenium(group_to_receive: str, user_data_directory: str) -> WebDriver
         chrome_options.add_argument("user-data-dir=" + user_data_directory)
         chrome_options.add_argument("--headless")
         driver_path="/usr/lib/chromium-browser/chromedriver"
+        print("creating driver")
         driver = webdriver.Chrome(service=Service(driver_path), chrome_options=chrome_options)
 
+    print("driver created, getting website")
     driver.get("https://web.whatsapp.com")
     print("Scan QR Code, And then Enter")
+    sys.stdout.flush()
     selected_contact_xpath = "//span[@title='" + group_to_receive + "']"
-    WebDriverWait(driver, 300).until(ec.element_to_be_clickable((By.XPATH, selected_contact_xpath)))
+    WebDriverWait(driver, 1800).until(ec.element_to_be_clickable((By.XPATH, selected_contact_xpath)))
     print("Logged In")
 
     selected_contact = driver.find_element("xpath", selected_contact_xpath)
@@ -88,9 +97,9 @@ def setup_selenium(group_to_receive: str, user_data_directory: str) -> WebDriver
     print(parent5)
     parent5.click()
     print("Opened contact")
-    
+
     return driver
-    
+
 def move_file_out(photograph: FileInfo, photo_deposition_location: str):
     shutil.move(photograph.file_location, photo_deposition_location)
 
@@ -98,10 +107,11 @@ def send_photos(number_of_photographs: int, group_to_receive: str, photo_deposit
     print("**** beginning script")
     print("**** setting up Selenium Web Driver")
     driver = setup_selenium(group_to_receive, user_data_directory)
-
+    sys.stdout.flush()
     print("**** Beginning loop over number of photographs")
     for _ in range(number_of_photographs):
-        
+
+        sys.stdout.flush()
         print(f"**** Attempting to send photo number {_ + 1}")
         print(f"**** Beginning photo collection from {photo_collection_location}")
         photograph: FileInfo = collect_photograph(photo_collection_location)
@@ -130,6 +140,8 @@ def send_photos(number_of_photographs: int, group_to_receive: str, photo_deposit
         attach_photo = driver.find_element("xpath", attach_photo_xpath)
         attach_photo.send_keys(photograph.file_location)
 
+
+
         try:
             print(f"**** Waiting to see a send div for the image")
             send_button_div_xpath = '//div[@aria-label="Send"]'
@@ -139,8 +151,8 @@ def send_photos(number_of_photographs: int, group_to_receive: str, photo_deposit
             send_button.click()
             print("Clicked send")
 
-            print(f"**** Waiting 5s to send!")
-            time.sleep(5)
+            print(f"**** Waiting 30s to send!")
+            time.sleep(30)
             print(f"sent photo number {_ + 1}")
             move_file_out(photograph, photo_deposition_location)
         except TimeoutException:
@@ -154,5 +166,13 @@ def send_photos(number_of_photographs: int, group_to_receive: str, photo_deposit
     driver.quit()
     print("now quit")
 
+    if platform.system() != 'Windows':
+        print("waiting 5 minutes before shutting down")
+        time.sleep(300)
+        print("shutdown")
+        os.system("shutdown now -h")
+	
+
 if __name__ == "__main__":
+    print("start of script")
     send_photos(NUMBER_OF_PHOTOGRAPHS, GROUP_TO_SEND_TO, PHOTO_DEPOSIT_LOCATION, PHOTO_COLLECT_LOCATION, USER_DATA_DIRECTORY)
