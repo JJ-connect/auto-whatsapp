@@ -15,7 +15,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException
 import time
-from PIL import Image
 from datetime import datetime
 
 class FileInfo:
